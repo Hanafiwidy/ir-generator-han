@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Incident Report IR Generator</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; padding: 20px; }
+    .monospace { font-family: monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="text-center mb-4">📋 Form Incident Report IR</h2>
+
+    <form id="incidentForm">
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Jenis Tiket</label>
+          <select class="form-select" id="jenis">
+            <option>Open</option>
+            <option>Close</option>
+            <option>Close Update</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Kategori Tiket</label>
+          <select class="form-select" id="kategori">
+            <option>IR-WABA</option>
+            <option>IR-SMS</option>
+            <option>IR-WABA&SMS</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Incident Name</label>
+          <input type="text" class="form-control" id="incidentName">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Nomor IR (Otomatis)</label>
+          <input type="text" class="form-control" id="noIR" readonly>
+        </div>
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Incident Start</label>
+          <input type="datetime-local" class="form-control" id="start">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Incident End</label>
+          <input type="datetime-local" class="form-control" id="end">
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Impact</label>
+        <input type="text" class="form-control" id="impactText">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Root Cause</label>
+        <textarea class="form-control" id="root" rows="2"></textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Action</label>
+        <textarea class="form-control" id="action" rows="2"></textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Escalation Engineer</label>
+        <input type="text" class="form-control" id="engineer">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Reporter</label>
+        <input type="text" class="form-control" id="reporter">
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <label class="form-label">Priority</label>
+          <select class="form-select" id="priority">
+            <option>Low</option><option>Medium</option><option>High</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Impact Level</label>
+          <select class="form-select" id="impactLevel">
+            <option>Low</option><option>Medium</option><option>High</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Urgency</label>
+          <select class="form-select" id="urgency">
+            <option>Low</option><option>Medium</option><option>High</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Down Service</label>
+        <select class="form-select" id="down">
+          <option>Yes</option><option>No</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Status</label>
+        <input type="text" class="form-control" id="status">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Note</label>
+        <textarea class="form-control" id="note" rows="3"></textarea>
+      </div>
+
+      <button type="button" class="btn btn-primary mb-3" onclick="copyToClipboard()">📋 Simpan dan Salin ke Clipboard</button>
+      <button type="button" class="btn btn-success mb-3" onclick="sendToWA()">📲 Kirim ke WhatsApp</button>
+      <button type="button" id="cancelEditBtn" class="btn btn-outline-danger mb-3 ms-2 d-none" onclick="cancelEdit()">❌ Batal Edit</button>
+    </form>
+
+    <!-- Tabel History IR -->
+    <div class="mb-4">
+      <h5>🗂️ History IR Tersimpan:</h5>
+      <table class="table table-bordered table-striped" id="historyTable">
+        <thead class="table-light">
+          <tr>
+            <th>No</th>
+            <th>Nomor IR</th>
+            <th>Incident Name</th>
+            <th>Status</th>
+            <th>Waktu</th>
+            <th>Reporter</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function resetForm() {
+  document.getElementById('incidentForm').reset();
+  editingRowIndex = null;
+  updateIRNumber();
+  document.getElementById('cancelEditBtn').classList.add('d-none');
+}
+    let irCounter = 1;
+    let editingRowIndex = null;
+
+    function updateIRNumber() {
+      const kategori = document.getElementById('kategori').value;
+      if (editingRowIndex === null) {
+        document.getElementById('noIR').value = `${kategori}-${irCounter}`;
+      }
+    }
+
+    document.getElementById('kategori').addEventListener('change', updateIRNumber);
+    window.onload = updateIRNumber;
+
+    function formatDateTimeLocal(datetimeStr) {
+      if (!datetimeStr) return '';
+      const d = new Date(datetimeStr);
+      return `${d.toLocaleDateString("id-ID")} ${d.toLocaleTimeString("id-ID")}`;
+    }
+
+    function formatLaporan() {
+      return `Status IR : ${document.getElementById('jenis').value}
+
+${document.getElementById('noIR').value}
+
+INCIDENT NAME :
+${document.getElementById('incidentName').value}
+
+INCIDENT START : ${formatDateTimeLocal(document.getElementById('start').value)}
+
+INCIDENT END : ${formatDateTimeLocal(document.getElementById('end').value)}
+
+IMPACT :
+${document.getElementById('impactText').value}
+
+ROOT CAUSE :
+${document.getElementById('root').value}
+
+ACTION :
+${document.getElementById('action').value}
+
+ESCALATION ENGINEER : ${document.getElementById('engineer').value}
+
+REPORTER : ${document.getElementById('reporter').value}
+
+PRIORITY : ${document.getElementById('priority').value}
+IMPACT : ${document.getElementById('impactLevel').value}
+URGENCY : ${document.getElementById('urgency').value}
+DOWN SERVICE : ${document.getElementById('down').value}
+
+STATUS :
+${document.getElementById('status').value}
+
+NOTE :
+${document.getElementById('note').value}`;
+    }
+
+    function fillFormFromRow(row) {
+      document.getElementById('jenis').value = row.dataset.jenis;
+      document.getElementById('kategori').value = row.dataset.kategori;
+      document.getElementById('incidentName').value = row.dataset.name;
+      document.getElementById('noIR').value = row.dataset.ir;
+      document.getElementById('start').value = row.dataset.start;
+      document.getElementById('end').value = row.dataset.end;
+      document.getElementById('impactText').value = row.dataset.impactText;
+      document.getElementById('root').value = row.dataset.root;
+      document.getElementById('action').value = row.dataset.action;
+      document.getElementById('engineer').value = row.dataset.engineer;
+      document.getElementById('reporter').value = row.dataset.reporter;
+      document.getElementById('priority').value = row.dataset.priority;
+      document.getElementById('impactLevel').value = row.dataset.impactLevel;
+      document.getElementById('urgency').value = row.dataset.urgency;
+      document.getElementById('down').value = row.dataset.down;
+      document.getElementById('status').value = row.dataset.status;
+      document.getElementById('note').value = row.dataset.note;
+    }
+
+    function simpanKeHistory() {
+      const table = document.getElementById("historyTable").getElementsByTagName("tbody")[0];
+
+      const irNumber = document.getElementById('noIR').value;
+      const incidentName = document.getElementById('incidentName').value;
+      const status = document.getElementById('jenis').value;
+      const waktu = new Date().toLocaleString("id-ID");
+      const reporter = document.getElementById('reporter').value;
+
+      if (editingRowIndex !== null) {
+        const row = table.rows[editingRowIndex];
+        row.cells[1].textContent = irNumber;
+        row.cells[2].textContent = incidentName;
+        row.cells[3].textContent = status;
+        row.cells[4].textContent = waktu;
+        row.cells[5].textContent = reporter;
+        saveRowData(row);
+        editingRowIndex = null;
+        return;
+      }
+
+      const row = table.insertRow();
+      const index = table.rows.length;
+      row.innerHTML = `
+        <td>${index}</td>
+        <td>${irNumber}</td>
+        <td>${incidentName}</td>
+        <td>${status}</td>
+        <td>${waktu}</td>
+        <td>${reporter}</td>
+        <td>
+            <button class="btn btn-sm btn-warning me-1" onclick="editRow(this)">Edit</button>
+            <button class="btn btn-sm btn-secondary" onclick="copyRow(this)">Copy</button>
+        </td>
+      `;
+      saveRowData(row);
+      irCounter++;
+      updateIRNumber();
+    }
+
+    function saveRowData(row) {
+      row.dataset.ir = document.getElementById('noIR').value;
+      row.dataset.kategori = document.getElementById('kategori').value;
+      row.dataset.name = document.getElementById('incidentName').value;
+      row.dataset.jenis = document.getElementById('jenis').value;
+      row.dataset.start = document.getElementById('start').value;
+      row.dataset.end = document.getElementById('end').value;
+      row.dataset.impactText = document.getElementById('impactText').value;
+      row.dataset.root = document.getElementById('root').value;
+      row.dataset.action = document.getElementById('action').value;
+      row.dataset.engineer = document.getElementById('engineer').value;
+      row.dataset.reporter = document.getElementById('reporter').value;
+      row.dataset.priority = document.getElementById('priority').value;
+      row.dataset.impactLevel = document.getElementById('impactLevel').value;
+      row.dataset.urgency = document.getElementById('urgency').value;
+      row.dataset.down = document.getElementById('down').value;
+      row.dataset.status = document.getElementById('status').value;
+      row.dataset.note = document.getElementById('note').value;
+    }
+
+    function editRow(button) {
+      const row = button.closest('tr');
+      const index = row.rowIndex - 1;
+      editingRowIndex = index;
+      fillFormFromRow(row);
+    }
+
+    function copyToClipboard() {
+  const teks = formatLaporan();
+  navigator.clipboard.writeText(teks).then(() => {
+    alert("✅ Disalin ke clipboard!");
+    simpanKeHistory();
+    resetForm();
+        });
+    }
+
+    function sendToWA() {
+      const teks = encodeURIComponent(formatLaporan());
+      window.open("https://wa.me/?text=" + teks, "_blank");
+      simpanKeHistory();
+    }
+
+    function cancelEdit() {
+  resetForm();
+    }
+
+    function editRow(button) {
+  const row = button.closest('tr');
+  const index = row.rowIndex - 1;
+  editingRowIndex = index;
+  fillFormFromRow(row);
+  document.getElementById('cancelEditBtn').classList.remove('d-none');
+    }
+
+    function copyRow(button) {
+  const row = button.closest('tr');
+  fillFormFromRow(row);
+  const teks = formatLaporan();
+  navigator.clipboard.writeText(teks).then(() => {
+    alert("✅ IR berhasil disalin dari history!");
+    resetForm();
+  });
+    }
+
+  </script>
+</body>
+</html>
